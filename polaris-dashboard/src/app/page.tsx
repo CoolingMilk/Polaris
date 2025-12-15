@@ -1,64 +1,113 @@
-import Image from "next/image";
+import { ApprovalChart } from "@/components/ApprovalChart";
+import { Card } from "@/components/Card";
+import { IssuesRanking } from "@/components/IssuesRanking";
+import { RefreshButton } from "@/components/RefreshButton";
+import { SentimentGauge } from "@/components/SentimentGauge";
+import { ThoughtLeadersGrid } from "@/components/ThoughtLeadersGrid";
+import { getTrumpApprovalTrend } from "@/lib/data/approval";
+import { getMockIssues } from "@/lib/data/issues";
+import { getMockThoughtLeaders } from "@/lib/data/thoughtLeaders";
 
-export default function Home() {
+// Segment config (ISR): keep as a simple literal for build-time validation.
+export const revalidate = 3600; // ~hourly
+
+export default async function Home() {
+  const [approvalTrend] = await Promise.all([
+    getTrumpApprovalTrend({ days: 180 }),
+  ]);
+
+  const issues = getMockIssues();
+  const thoughtLeaders = getMockThoughtLeaders();
+
+  const latest = approvalTrend.points.at(-1);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-dvh bg-zinc-50 text-zinc-900">
+      <header className="border-b border-zinc-200 bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">
+              Polaris Dashboard
+            </h1>
+            <p className="mt-1 text-sm text-zinc-600">
+              Neutral, at-a-glance signals for US political sentiment and issue
+              focus.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right text-xs text-zinc-500 sm:block">
+              <div>
+                Data refresh: <span className="font-medium">hourly</span>
+              </div>
+              <div>
+                Updated: <span className="font-medium">{approvalTrend.updatedAt}</span>
+              </div>
+            </div>
+            <RefreshButton />
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </header>
+
+      <main className="mx-auto max-w-6xl px-5 py-6">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card
+            title="Overall leaning / sentiment"
+            description="Approval trend (approve vs disapprove)."
+            right={
+              latest ? (
+                <div className="text-right">
+                  <div className="text-xs text-zinc-500">Latest</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">
+                    {latest.approve.toFixed(1)}% / {latest.disapprove.toFixed(1)}%
+                  </div>
+                </div>
+              ) : null
+            }
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <ApprovalChart points={approvalTrend.points} />
+            <p className="mt-3 text-xs text-zinc-500">
+              Source: <a className="underline" href={approvalTrend.source.url} target="_blank" rel="noreferrer">{approvalTrend.source.label}</a>
+              {" "}
+              (MVP extraction; may fall back to mock if blocked.)
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">
+              Coming next: "Right direction / wrong track" trend card.
+            </p>
+          </Card>
+
+          <Card
+            title="Top issues"
+            description="Top 10 issues Americans say matter most (mocked for MVP)."
           >
-            Documentation
-          </a>
+            <IssuesRanking issues={issues} />
+            <p className="mt-3 text-xs text-zinc-500">
+              TODO: scrape Gallup "Most Important Problem" table and cache server-side.
+            </p>
+          </Card>
+
+          <Card
+            title="Social sentiment"
+            description="Real-time sentiment on key topics (V1: coming soon)."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SentimentGauge topic="Economy" comingSoon />
+              <SentimentGauge topic="Immigration" comingSoon />
+              <SentimentGauge topic="Healthcare" comingSoon />
+              <SentimentGauge topic="Foreign policy" comingSoon />
+            </div>
+          </Card>
+
+          <Card
+            title="Curated thought leaders"
+            description="Balanced set of voices: 5 left, 5 center, 5 right (posts mocked)."
+          >
+            <ThoughtLeadersGrid leaders={thoughtLeaders} />
+          </Card>
         </div>
+
+        <footer className="mt-8 text-xs text-zinc-500">
+          Polaris Dashboard is designed to be neutral and transparent about data sources.
+        </footer>
       </main>
     </div>
   );

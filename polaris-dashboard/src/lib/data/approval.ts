@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 export type ApprovalTrendPoint = {
   /** ISO date (YYYY-MM-DD) */
   date: string;
@@ -129,19 +131,12 @@ function mockTrend(): ApprovalTrend {
   };
 }
 
-export async function getTrumpApprovalTrend(options?: {
-  /** How far back to keep points (in days). */
-  days?: number;
-  /** Next.js fetch revalidate seconds. */
-  revalidateSeconds?: number;
-}): Promise<ApprovalTrend> {
-  const days = options?.days ?? 365;
-  const revalidateSeconds = options?.revalidateSeconds ?? 60 * 60; // hourly
-
-  try {
+const getCachedExtractedPoints = unstable_cache(
+  async (): Promise<ApprovalTrendPoint[]> => {
     const res = await fetch(RCPOLL_TRUMP_APPROVAL_URL, {
-      // Avoid cache issues and keep it server-side.
-      next: { revalidate: revalidateSeconds },
+      // The HTML response is large (>2MB) and cannot be stored in Next's data cache.
+      // We fetch without caching, then cache only the small extracted result.
+      cache: "no-store",
       headers: {
         // Some sites behave better with a UA.
         "user-agent":
@@ -153,7 +148,20 @@ export async function getTrumpApprovalTrend(options?: {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const html = await res.text();
-    const extracted = extractPollPointsFromHtml(html);
+    return extractPollPointsFromHtml(html);
+  },
+  ["polaris:approval:rcpoll:extracted"],
+  { revalidate: 60 * 60 },
+);
+
+export async function getTrumpApprovalTrend(options?: {
+  /** How far back to keep points (in days). */
+  days?: number;
+}): Promise<ApprovalTrend> {
+  const days = options?.days ?? 365;
+
+  try {
+    const extracted = await getCachedExtractedPoints();
 
     // If extraction fails (markup change), fall back to mock rather than breaking the UI.
     if (extracted.length < 10) return mockTrend();
